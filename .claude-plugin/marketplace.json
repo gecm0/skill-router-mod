@@ -1,0 +1,13 @@
+{
+  "name": "skill-router-mod",
+  "description": "The skill-router mod: Jev picks and loads the skills each prompt needs.",
+  "owner": {
+    "name": "gecm0"
+  },
+  "plugins": [
+    {
+      "name": "skill-router",
+      "source": "./"
+    }
+  ]
+}

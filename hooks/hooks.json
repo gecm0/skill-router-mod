@@ -1,0 +1,4 @@
+{
+  "description": "prompt.submit asks $.jev which skills fit and attaches a load instruction; AbovePrompt shows the ranking",
+  "modules": ["./register.tsx"]
+}

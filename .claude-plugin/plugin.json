@@ -1,0 +1,34 @@
+{
+  "name": "skill-router",
+  "version": "0.1.0",
+  "description": "On every prompt, asks Jev which skills fit, shows them ranked above the prompt, and has the model load those over the threshold.",
+  "author": {
+    "name": "gecm"
+  },
+  "repository": "https://github.com/gecm0/skill-router-mod",
+  "homepage": "https://github.com/gecm0/skill-router-mod",
+  "types": "./types/index.d.ts",
+  "dependencies": [
+    "jev"
+  ],
+  "userConfig": {
+    "threshold": {
+      "type": "number",
+      "title": "Threshold",
+      "description": "Probability (0 to 1) a skill needs to be shown and loaded.",
+      "default": 0.8
+    },
+    "max_skills": {
+      "type": "number",
+      "title": "Max skills",
+      "description": "How many skills to load per prompt at most, highest first.",
+      "default": 3
+    },
+    "timeout_ms": {
+      "type": "number",
+      "title": "Timeout (ms)",
+      "description": "How long to wait for Jev before sending the prompt without skills.",
+      "default": 1500
+    }
+  }
+}
