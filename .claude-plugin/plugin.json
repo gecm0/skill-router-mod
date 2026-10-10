@@ -9,7 +9,7 @@
   "homepage": "https://github.com/gecm0/skill-router-mod",
   "types": "./types/index.d.ts",
   "dependencies": [
-    "jev"
+    "jev@jev-mod"
   ],
   "userConfig": {
     "threshold": {
