@@ -1,5 +1,5 @@
-/** One skill that passed the threshold. */
-export type SkillRouterHit = { name: string; p: number; loaded: boolean }
+/** One skill suggested for the prompt. */
+export type SkillRouterHit = { name: string; p: number }
 
 /** What the band shows: the last prompt's routing. */
 export type SkillRouterLast =

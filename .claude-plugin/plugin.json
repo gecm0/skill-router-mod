@@ -1,7 +1,7 @@
 {
   "name": "skill-router",
   "version": "0.1.0",
-  "description": "On every prompt, asks Jev which skills fit, shows them ranked above the prompt, loads the best one and offers the rest as optional.",
+  "description": "On every prompt, asks Jev which skills fit, shows them ranked above the prompt, and passes them to the model as suggestions.",
   "author": {
     "name": "gecm"
   },
@@ -19,11 +19,11 @@
       "description": "Probability (0 to 1) a skill needs to be shown and loaded.",
       "default": 0.8
     },
-    "max_skills": {
+    "max_suggestions": {
       "type": "number",
-      "title": "Max skills",
-      "description": "How many skills to load per prompt, highest first. The rest over the threshold are shown and offered as optional.",
-      "default": 1
+      "title": "Max suggestions",
+      "description": "How many skills over the threshold to show and suggest, highest first.",
+      "default": 3
     },
     "timeout_ms": {
       "type": "number",

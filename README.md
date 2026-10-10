@@ -1,34 +1,33 @@
 # skill-router
 
-A Claude Code mod that loads the right skill on its own. On every prompt it
-asks [Jev](https://typesafe.ai) whether each skill fits, shows the ones over the
-threshold ranked above the prompt, has the model load the best one before it
-starts, and offers the rest as optional.
+A Claude Code mod that suggests the right skills for each prompt. On every
+prompt it asks [Jev](https://typesafe.ai) whether each skill fits, shows the
+ones over the threshold ranked above the prompt, and passes them to the model as
+a suggestion. It never orders a skill loaded: the model decides.
 
 ```
-Jev · tdd 0.96 ✓ · animate 0.95 (240 ms)
+Jev suggests · tdd 0.96 · animate 0.95 (240 ms)
 ```
 
 ## How it works
 
 - Candidates are the skills the model can invoke itself (the engine's own
-  listing), minus any already loaded in this conversation. User-only slash
-  commands, and commands with side effects such as delegating work, are never
-  candidates.
+  listing), minus any the main conversation already loaded. User-only slash
+  commands are left out.
 - One Noul question per skill, all in one request: "is the user asking for this
   kind of task to be done now?" Each skill gets its own probability, so none at
   all is a normal outcome, and a prompt that only asks about or weighs a task
   does not trigger it.
-- Skills at or over the threshold are ranked. The best one (up to the maximum)
-  is loaded; the others are shown and passed to the model as optional, to load
-  only if the task turns out to need them. Each skill costs context.
-- Loading is a hidden instruction telling the model to call the Skill tool. A
-  mod cannot load skill content itself: the Skill tool does not hand its content
-  back to a plugin.
-- Every skill the Skill tool loads is remembered for the conversation and not
-  routed again; `/clear` forgets them.
-- Fails open: a timeout, an outage or a missing key only skips the routing,
-  and the band says why.
+- Skills at or over the threshold are ranked, up to the maximum, and passed to
+  the model as a hidden note: a suggestion to load one only if it clearly helps,
+  and never one that runs actions or delegates work unless you asked.
+- Why only suggest: a mod cannot tell a skill that only teaches from one that
+  acts (delegates to another agent, runs a subagent), and every loaded skill
+  costs context.
+- Skills the main conversation loads are remembered and not suggested again;
+  a subagent's loads do not count, and `/clear` forgets them.
+- Fails open: a timeout, an outage or a missing key only skips the routing, and
+  the band says why. The band clears when a prompt is not routed.
 - Skips slash commands, prompts under 12 characters, and prompts not typed by you.
 
 ## Options
@@ -37,8 +36,8 @@ Set in `/plugin` → Installed → skill-router → Configure options.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| Threshold | 0.8 | Probability a skill needs to be shown and loaded |
-| Max skills | 1 | Skills loaded per prompt, highest first; the rest over the threshold are optional |
+| Threshold | 0.8 | Probability (above 0, up to 1) a skill needs to be suggested; anything else falls back to 0.8 |
+| Max suggestions | 3 | Skills over the threshold to show and suggest, highest first |
 | Timeout (ms) | 1500 | How long to wait for Jev before sending the prompt without skills |
 
 ## Install

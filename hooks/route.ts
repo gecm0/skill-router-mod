@@ -14,9 +14,9 @@ export function shouldRoute(text: string, originKind: string): boolean {
 
 /**
  * The candidates: skills the model can invoke itself (the engine's own listing),
- * minus those already loaded, with descriptions from the command list. A slash
- * command outside that listing (user-only, or one with side effects such as
- * delegating work) is never a candidate.
+ * minus those already loaded, with descriptions from the command list. User-only
+ * commands are left out; skills that act are not, which is why the router only
+ * ever suggests.
  */
 export function candidatesOf(
   modelSkills: readonly string[],
@@ -58,7 +58,7 @@ export function questionsOf(skills: readonly Skill[]): Record<string, JevNoulQue
   return questions
 }
 
-/** Skills at or over the threshold, best first; the top `max` are marked to load. */
+/** Skills at or over the threshold, best first, at most `max` of them. */
 export function rank(
   skills: readonly Skill[],
   nouls: Readonly<Record<string, { noul: number }>>,
@@ -69,28 +69,26 @@ export function rank(
     .map((skill, i) => ({ name: skill.name, p: nouls[`s${i}`]?.noul ?? 0 }))
     .filter((hit) => hit.p >= threshold)
     .sort((a, b) => b.p - a.p)
-    .map((hit, i) => ({ ...hit, loaded: i < max }))
+    .slice(0, max)
 }
 
-/** The hidden instruction the model reads beside the prompt. */
+/**
+ * The hidden note the model reads beside the prompt. A suggestion, never an
+ * order: a mod cannot tell a skill that only teaches from one that acts
+ * (delegates work, runs a subagent), so the model decides.
+ */
 export function instructionOf(hits: readonly SkillRouterHit[]): string | undefined {
-  const fmt = (hit: SkillRouterHit) => `${hit.name} (${hit.p.toFixed(2)})`
-  const load = hits.filter((hit) => hit.loaded)
-  const optional = hits.filter((hit) => !hit.loaded)
   if (hits.length === 0) return undefined
-  const parts = ['[skill-router] Jev matched this request to skills.']
-  if (load.length > 0) {
-    parts.push(
-      `Load ${load.map(fmt).join(', ')} with the Skill tool before starting, then follow it. ` +
-        'Skip it only if, after reading it, it clearly does not apply.',
-    )
-  }
-  if (optional.length > 0) {
-    // Each skill costs context; the rest are hints, not orders.
-    parts.push(
-      `Also possibly relevant: ${optional.map(fmt).join(', ')}. ` +
-        'Do not load these unless the task turns out to need one.',
-    )
-  }
-  return parts.join(' ')
+  const list = hits.map((hit) => `${hit.name} (${hit.p.toFixed(2)})`).join(', ')
+  return (
+    `[skill-router] Jev suggests these skills may fit this request: ${list}. ` +
+    'This is a suggestion, not an instruction. Load one with the Skill tool only if it would ' +
+    'clearly help; each skill costs context, so prefer one at most. Never load a skill that ' +
+    'runs actions or delegates work unless the user asked for that.'
+  )
+}
+
+/** A threshold outside 0 to 1 would match everything or nothing; fall back instead. */
+export function thresholdOf(value: unknown): number {
+  return typeof value === 'number' && value > 0 && value <= 1 ? value : 0.8
 }

@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
 import type { SkillRouterLast } from '../types'
-import { candidatesOf, instructionOf, questionsOf, rank, shouldRoute, stateOf } from './route'
+import { candidatesOf, instructionOf, questionsOf, rank, shouldRoute, stateOf, thresholdOf } from './route'
 
 const last = atom({ plugin: 'skill-router', key: 'last' } as const, null as SkillRouterLast | null)
 const loaded = atom({ plugin: 'skill-router', key: 'loaded' } as const, [] as string[])
@@ -12,12 +12,16 @@ function num(value: unknown, fallback: number): number {
 }
 
 export const register: Register = (on, options) => {
-  const threshold = num(options.threshold, 0.8)
-  const max = Math.max(0, Math.floor(num(options.max_skills, 1)))
+  const threshold = thresholdOf(options.threshold)
+  const max = Math.max(1, Math.floor(num(options.max_suggestions, 3)))
   const timeoutMs = num(options.timeout_ms, 1500)
 
   on('prompt.submit', async ($, e, next) => {
-    if (!shouldRoute(e.text, e.origin.kind)) return next(e)
+    if (!shouldRoute(e.text, e.origin.kind)) {
+      // Clear the band so it never shows an earlier prompt's suggestions.
+      await update($, last, () => null)
+      return next(e)
+    }
 
     let context = e.context
     try {
@@ -31,7 +35,10 @@ export const register: Register = (on, options) => {
         await $.command.list(),
         await read($, loaded),
       )
-      if (skills.length === 0) return next(e)
+      if (skills.length === 0) {
+        await update($, last, () => null)
+        return next(e)
+      }
 
       const { answers, elapsedMs } = await $.jev.ask({
         state: stateOf(e.text),
@@ -51,10 +58,11 @@ export const register: Register = (on, options) => {
     return next({ ...e, context })
   }).catch(($, e, next) => next(e))
 
-  // Record every skill the Skill tool loads, routed or not, so it is never routed again.
+  // Record every skill the main conversation loads, suggested or not, so it is
+  // not suggested again. A subagent's load never reaches the main context.
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
     const result = await next(e)
-    if (!result.deny && !result.isError) {
+    if (e.agentId === undefined && !result.deny && !result.isError) {
       await update($, loaded, (names) => (names.includes(e.skill) ? names : [...names, e.skill]))
     }
     return result
@@ -74,7 +82,7 @@ export const register: Register = (on, options) => {
     if (state.status === 'failed') {
       return (
         <Box>
-          <Text dimColor>Jev · no skills loaded: {state.reason}</Text>
+          <Text dimColor>Jev · no suggestions: {state.reason}</Text>
         </Box>
       )
     }
@@ -87,12 +95,11 @@ export const register: Register = (on, options) => {
     }
     return (
       <Box>
-        <Text dimColor>Jev · </Text>
+        <Text dimColor>Jev suggests · </Text>
         {state.hits.map((hit, i) => (
-          <Text key={hit.name} color={hit.loaded ? 'green' : undefined} dimColor={!hit.loaded}>
+          <Text key={hit.name} color={i === 0 ? 'green' : undefined} dimColor={i > 0}>
             {i > 0 ? ' · ' : ''}
             {hit.name} {hit.p.toFixed(2)}
-            {hit.loaded ? ' ✓' : ''}
           </Text>
         ))}
         <Text dimColor> ({state.ms} ms)</Text>

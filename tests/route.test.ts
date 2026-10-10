@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { candidatesOf, instructionOf, questionsOf, rank, shouldRoute } from '../hooks/route'
+import { candidatesOf, instructionOf, questionsOf, rank, shouldRoute, thresholdOf } from '../hooks/route'
 
 const SKILLS = [
   { name: 'animate', description: 'Builds motion.' },
@@ -24,54 +24,51 @@ test('one noul per skill, keyed by index, carrying the name and description', ()
   expect(JSON.stringify(q.s1?.instructions)).toContain('Test-driven development.')
 })
 
-test('keeps only hits over the threshold, best first, and loads at most max', () => {
+test('the question excludes prompts that only discuss a task', () => {
+  const q = JSON.stringify(questionsOf(SKILLS).s0)
+  expect(q).toContain('right now')
+  expect(q).toContain('without asking for it to be done now')
+})
+
+test('keeps hits over the threshold, best first, at most max', () => {
   const nouls = { s0: { noul: 0.96 }, s1: { noul: 0.84 }, s2: { noul: 0.1 }, s3: { noul: 0.81 }, s4: { noul: 0.9 } }
   expect(rank(SKILLS, nouls, 0.8, 3)).toEqual([
-    { name: 'animate', p: 0.96, loaded: true },
-    { name: 'archify', p: 0.9, loaded: true },
-    { name: 'tdd', p: 0.84, loaded: true },
-    { name: 'emil-design-eng', p: 0.81, loaded: false },
+    { name: 'animate', p: 0.96 },
+    { name: 'archify', p: 0.9 },
+    { name: 'tdd', p: 0.84 },
   ])
+  expect(rank(SKILLS, { s1: { noul: 0.5 } }, 0.8, 3)).toEqual([])
 })
 
-test('a single hit is the one loaded; none means no instruction', () => {
-  const one = rank(SKILLS, { s1: { noul: 0.85 } }, 0.8, 1)
-  expect(one).toEqual([{ name: 'tdd', p: 0.85, loaded: true }])
-  expect(instructionOf(one)).toContain('Load tdd (0.85)')
-  expect(instructionOf(rank(SKILLS, { s1: { noul: 0.5 } }, 0.8, 1))).toBeUndefined()
-})
-
-test('loads only the best; the rest are offered as optional, not ordered', () => {
+test('the note suggests and never orders a load', () => {
   const text = instructionOf([
-    { name: 'animate', p: 0.96, loaded: true },
-    { name: 'tdd', p: 0.84, loaded: false },
-    { name: 'slides', p: 0.81, loaded: false },
+    { name: 'animate', p: 0.96 },
+    { name: 'tdd', p: 0.84 },
   ])
-  expect(text).toContain('Load animate (0.96) with the Skill tool')
-  expect(text).toContain('Also possibly relevant: tdd (0.84), slides (0.81)')
-  expect(text).toContain('Do not load these unless')
+  expect(text).toContain('animate (0.96), tdd (0.84)')
+  expect(text).toContain('not an instruction')
+  expect(text).toContain('Never load a skill that runs actions or delegates work')
+  expect(text).not.toMatch(/\bLoad \S+ with the Skill tool before/)
+  expect(instructionOf([])).toBeUndefined()
 })
 
-test('with max 0 every hit is optional and nothing is ordered loaded', () => {
-  const text = instructionOf(rank(SKILLS, { s0: { noul: 0.9 } }, 0.8, 0))
-  expect(text).not.toContain('Load ')
-  expect(text).toContain('Also possibly relevant: animate (0.90)')
+test('a threshold outside 0 to 1 falls back to 0.8', () => {
+  expect(thresholdOf(0.9)).toBe(0.9)
+  expect(thresholdOf(1)).toBe(1)
+  expect(thresholdOf(-1)).toBe(0.8)
+  expect(thresholdOf(0)).toBe(0.8)
+  expect(thresholdOf(2)).toBe(0.8)
+  expect(thresholdOf('0.9')).toBe(0.8)
+  expect(thresholdOf(Number.NaN)).toBe(0.8)
 })
 
-test('candidates are only model-invocable skills, minus those already loaded', () => {
+test('candidates are only listed skills with a description, minus those already loaded', () => {
   const commands = [
     { name: 'tdd', description: 'Test first.' },
-    { name: 'codex:rescue', description: 'Delegates work to Codex.' },
     { name: 'animate', description: 'Builds motion.' },
     { name: 'implement', description: 'User-only command.' },
     { name: 'archify', description: '' },
   ]
   const got = candidatesOf(['tdd', 'animate', 'archify'], commands, ['animate'])
   expect(got).toEqual([{ name: 'tdd', description: 'Test first.' }])
-})
-
-test('the question excludes prompts that only discuss a task', () => {
-  const q = JSON.stringify(questionsOf(SKILLS).s0)
-  expect(q).toContain('right now')
-  expect(q).toContain('without asking for it to be done now')
 })
