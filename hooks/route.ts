@@ -12,6 +12,24 @@ export function shouldRoute(text: string, originKind: string): boolean {
   return (originKind === 'composer' || originKind === 'bridge') && !t.startsWith('/') && t.length >= 12
 }
 
+/**
+ * The candidates: skills the model can invoke itself (the engine's own listing),
+ * minus those already loaded, with descriptions from the command list. A slash
+ * command outside that listing (user-only, or one with side effects such as
+ * delegating work) is never a candidate.
+ */
+export function candidatesOf(
+  modelSkills: readonly string[],
+  commands: readonly { name: string; description: string }[],
+  loaded: readonly string[],
+): Skill[] {
+  const invocable = new Set(modelSkills)
+  const done = new Set(loaded)
+  return commands
+    .filter((c) => invocable.has(c.name) && !done.has(c.name) && c.description.trim() !== '')
+    .map((c) => ({ name: c.name, description: c.description }))
+}
+
 export function stateOf(text: string): { request: string } {
   return { request: text.trim().slice(0, MAX_PROMPT_CHARS) }
 }
@@ -26,12 +44,14 @@ export function questionsOf(skills: readonly Skill[]): Record<string, JevNoulQue
     questions[`s${i}`] = {
       type: 'noul',
       instructions: {
-        claim: 'An AI coding agent handling this request should load this skill before starting.',
+        claim: 'The user is asking the agent to carry out, right now, a task this skill covers.',
         skill: { name: skill.name, description: skill.description },
       },
       criteria: {
-        true: "The request is squarely the kind of task the skill's description covers.",
-        false: 'The skill is unrelated, only loosely related, or covers a different kind of task.',
+        true: "The request asks the agent to do the kind of task the skill's description covers, in this turn.",
+        false:
+          'The skill is unrelated or only loosely related, or the user only asks about, discusses, ' +
+          'or weighs whether to do such a task without asking for it to be done now.',
       },
     }
   })
@@ -54,12 +74,23 @@ export function rank(
 
 /** The hidden instruction the model reads beside the prompt. */
 export function instructionOf(hits: readonly SkillRouterHit[]): string | undefined {
+  const fmt = (hit: SkillRouterHit) => `${hit.name} (${hit.p.toFixed(2)})`
   const load = hits.filter((hit) => hit.loaded)
-  if (load.length === 0) return undefined
-  const list = load.map((hit) => `${hit.name} (${hit.p.toFixed(2)})`).join(', ')
-  return (
-    `[skill-router] Jev matched this request to: ${list}. ` +
-    'Before doing anything else, load each of these with the Skill tool, in this order, then follow them. ' +
-    'Skip one only if, after reading it, it clearly does not apply.'
-  )
+  const optional = hits.filter((hit) => !hit.loaded)
+  if (hits.length === 0) return undefined
+  const parts = ['[skill-router] Jev matched this request to skills.']
+  if (load.length > 0) {
+    parts.push(
+      `Load ${load.map(fmt).join(', ')} with the Skill tool before starting, then follow it. ` +
+        'Skip it only if, after reading it, it clearly does not apply.',
+    )
+  }
+  if (optional.length > 0) {
+    // Each skill costs context; the rest are hints, not orders.
+    parts.push(
+      `Also possibly relevant: ${optional.map(fmt).join(', ')}. ` +
+        'Do not load these unless the task turns out to need one.',
+    )
+  }
+  return parts.join(' ')
 }

@@ -2,9 +2,10 @@ import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
 import type { SkillRouterLast } from '../types'
-import { instructionOf, questionsOf, rank, shouldRoute, stateOf, type Skill } from './route'
+import { candidatesOf, instructionOf, questionsOf, rank, shouldRoute, stateOf } from './route'
 
 const last = atom({ plugin: 'skill-router', key: 'last' } as const, null as SkillRouterLast | null)
+const loaded = atom({ plugin: 'skill-router', key: 'loaded' } as const, [] as string[])
 
 function num(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -12,7 +13,7 @@ function num(value: unknown, fallback: number): number {
 
 export const register: Register = (on, options) => {
   const threshold = num(options.threshold, 0.8)
-  const max = Math.max(0, Math.floor(num(options.max_skills, 3)))
+  const max = Math.max(0, Math.floor(num(options.max_skills, 1)))
   const timeoutMs = num(options.timeout_ms, 1500)
 
   on('prompt.submit', async ($, e, next) => {
@@ -20,10 +21,16 @@ export const register: Register = (on, options) => {
 
     let context = e.context
     try {
-      // Plugin skills and the person's own; builtins and MCP prompts are not skills.
-      const skills: Skill[] = (await $.command.list())
-        .filter((c) => (c.source === 'plugin' || c.source === 'user') && c.description.trim() !== '')
-        .map((c) => ({ name: c.name, description: c.description }))
+      // The engine's own skill listing is what the model may invoke; the summary
+      // breakdown is computed locally and sends nothing.
+      const usage = await $.session.usage({ breakdown: 'summary' })
+      const listing = usage.context.breakdown?.skills?.skillFrontmatter
+      if (!listing) throw new Error('the session lists no skills yet')
+      const skills = candidatesOf(
+        listing.map((s) => s.name),
+        await $.command.list(),
+        await read($, loaded),
+      )
       if (skills.length === 0) return next(e)
 
       const { answers, elapsedMs } = await $.jev.ask({
@@ -43,6 +50,21 @@ export const register: Register = (on, options) => {
     }
     return next({ ...e, context })
   }).catch(($, e, next) => next(e))
+
+  // Record every skill the Skill tool loads, routed or not, so it is never routed again.
+  on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
+    const result = await next(e)
+    if (!result.deny && !result.isError) {
+      await update($, loaded, (names) => (names.includes(e.skill) ? names : [...names, e.skill]))
+    }
+    return result
+  }).catch(($, e, next) => next(e))
+
+  // A /clear drops the loaded skills from the conversation, so forget them too.
+  on('session.end', async ($, e, next) => {
+    if (e.reason === 'clear') await update($, loaded, () => [])
+    return next(e)
+  })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const state = await read($, last)

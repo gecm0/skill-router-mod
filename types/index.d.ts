@@ -8,6 +8,10 @@ export type SkillRouterLast =
 
 declare module 'claude-code' {
   interface PluginState {
-    'skill-router': { last: SkillRouterLast | null }
+    'skill-router': {
+      last: SkillRouterLast | null
+      /** Skills the Skill tool already loaded this conversation, so they are not loaded twice. */
+      loaded: string[]
+    }
   }
 }
