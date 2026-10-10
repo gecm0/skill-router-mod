@@ -72,3 +72,15 @@ test('candidates are only listed skills with a description, minus those already 
   const got = candidatesOf(['tdd', 'animate', 'archify'], commands, ['animate'])
   expect(got).toEqual([{ name: 'tdd', description: 'Test first.' }])
 })
+
+test('a skill installed twice under two names is offered once, by its shorter name', () => {
+  const commands = [
+    { name: 'mattpocock-skills:tdd', description: 'Test-driven development.' },
+    { name: 'tdd', description: 'Test-driven development.' },
+    { name: 'animate', description: 'Builds motion.' },
+  ]
+  const got = candidatesOf(['mattpocock-skills:tdd', 'tdd', 'animate'], commands, [])
+  expect(got.map((s) => s.name)).toEqual(['tdd', 'animate'])
+  const afterLoad = candidatesOf(['mattpocock-skills:tdd', 'tdd', 'animate'], commands, ['tdd'])
+  expect(afterLoad.map((s) => s.name)).toEqual(['animate'])
+})

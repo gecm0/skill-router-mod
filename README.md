@@ -13,7 +13,8 @@ Jev suggests · tdd 0.96 · animate 0.95 (240 ms)
 
 - Candidates are the skills the model can invoke itself (the engine's own
   listing), minus any the main conversation already loaded. User-only slash
-  commands are left out.
+  commands are left out, and a skill installed twice under two names is
+  offered once.
 - One Noul question per skill, all in one request: "is the user asking for this
   kind of task to be done now?" Each skill gets its own probability, so none at
   all is a normal outcome, and a prompt that only asks about or weighs a task

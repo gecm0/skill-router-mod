@@ -24,10 +24,19 @@ export function candidatesOf(
   loaded: readonly string[],
 ): Skill[] {
   const invocable = new Set(modelSkills)
+  // The same skill installed twice (a user copy and a plugin's `plugin:name`)
+  // shares its description: keep one, preferring the shorter name, and treat
+  // either copy being loaded as both.
   const done = new Set(loaded)
-  return commands
-    .filter((c) => invocable.has(c.name) && !done.has(c.name) && c.description.trim() !== '')
-    .map((c) => ({ name: c.name, description: c.description }))
+  const doneDescriptions = new Set(commands.filter((c) => done.has(c.name)).map((c) => c.description.trim()))
+  const byDescription = new Map<string, Skill>()
+  for (const c of commands) {
+    const description = c.description.trim()
+    if (!invocable.has(c.name) || description === '' || doneDescriptions.has(description)) continue
+    const kept = byDescription.get(description)
+    if (!kept || c.name.length < kept.name.length) byDescription.set(description, { name: c.name, description: c.description })
+  }
+  return [...byDescription.values()]
 }
 
 export function stateOf(text: string): { request: string } {
